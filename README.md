@@ -1,99 +1,122 @@
-Scalable ML Inference Platform on AWS
+# ML Inference on AWS (ECS Fargate + ALB + Terraform)
 
-ECS Fargate • Application Load Balancer • Terraform • Docker • FastAPI
+A production-style machine learning inference platform deployed on AWS using **ECS Fargate**, **Application Load Balancer**, and **Terraform**.  
+Includes a containerised **FastAPI** inference service, a scikit-learn model pipeline, CloudWatch logging, and an end-to-end deploy/destroy workflow.
 
-Overview
+---
 
-This project implements an end-to-end, production-style machine learning inference platform deployed to AWS using Infrastructure as Code.
+## What this project demonstrates
 
-The system demonstrates the complete operationalisation lifecycle of an ML model:
+This repo is intentionally designed to show **ML engineering + cloud operationalisation**, not just modelling.
 
-Model training (scikit-learn)
+- **Model training and packaging** (scikit-learn pipeline + exported artefacts)
+- **Containerised inference API** (FastAPI + Uvicorn + Docker)
+- **Infrastructure as Code** (Terraform provisioning of AWS resources)
+- **Managed deployment** (ECS Fargate, ALB routing, health checks)
+- **Observability** (CloudWatch log group + streams)
+- **Cost-aware lifecycle** (repeatable `terraform apply` and `terraform destroy`)
 
-Containerised inference service (FastAPI + Docker)
+---
 
-Cloud deployment (AWS ECS Fargate)
+## High-level architecture
 
-Traffic routing (Application Load Balancer)
-
-Infrastructure provisioning (Terraform)
-
-Observability (CloudWatch logs)
-
-Cost-aware deploy and destroy lifecycle
-
-The platform simulates a credit risk / debt approval classifier and exposes prediction endpoints over HTTP.
-
-Architecture
-
+Request flow:
 Client
-→ Application Load Balancer (HTTP)
-→ ECS Fargate Service (1 task)
-→ FastAPI Inference Application
-→ scikit-learn Pipeline
-→ JSON Response
+-> Application Load Balancer (HTTP :80)
+-> Target Group (HTTP :8000, /health)
+-> ECS Fargate Service (1 task)
+-> FastAPI Inference App (Uvicorn)
+-> scikit-learn Pipeline
+-> JSON response
 
-All infrastructure is provisioned and destroyed using Terraform.
 
-Model Design
+Key design choices:
 
-Model type:
+- ALB handles **public ingress** and health checks.
+- ECS tasks run in **awsvpc mode** for network isolation.
+- Task traffic is restricted via **security groups** (ALB -> task only).
+- Logs are shipped to **CloudWatch** for debugging and runtime visibility.
 
-StandardScaler + LogisticRegression (scikit-learn pipeline)
+---
 
-Features:
+## Repository structure
+ml-inference-aws-platform/
+├─ app/ # FastAPI service (inference API)
+├─ model/ # training + artefacts (joblib + metadata)
+│ └─ artifacts/ # model.joblib, metadata.json, etc.
+├─ infra/
+│ └─ terraform/ # AWS ECS + ALB + VPC IaC
+├─ tests/ # unit/integration tests
+├─ Dockerfile # container build for inference service
+├─ requirements.txt # Python dependencies
+└─ README.md
 
-income
 
-age
 
-debt_ratio
+---
 
-credit_score
+## Model details
 
-loan_amount
+### Model type
+- `StandardScaler + LogisticRegression` (scikit-learn pipeline)
 
-employment_years
+### Features
+- `income`
+- `age`
+- `debt_ratio`
+- `credit_score`
+- `loan_amount`
+- `employment_years`
 
-Outputs:
+### Outputs
+- `probability` (float)
+- `label` (int, threshold-based)
+- `model_version` (timestamp/version string)
+- `threshold` (float)
 
-probability (float)
+The deployed service exposes runtime metadata (including dependency versions and evaluation metrics) via `/model-info`.
 
-binary classification label (threshold-based decision)
+---
 
-Model metadata (including dependency versions and evaluation metrics) is exposed via the /model-info endpoint.
+## API endpoints
 
-API Specification
-Health Check
+### Health check
 
+**Request**
+```http
 GET /health
 
-Response:
+Response
 
-{
-  "status": "ok"
-}
-Model Metadata
+{"status":"ok"}
+
+
+Model metadata
+
+Request
 
 GET /model-info
 
-Returns:
+Response (example)
 
-model type
+{
+  "model_type": "sklearn.pipeline(StandardScaler + LogisticRegression)",
+  "created_utc": "2026-03-01T16:39:42.590227+00:00",
+  "seed": 42,
+  "n_samples": 15000,
+  "threshold": 0.5,
+  "features": ["income","age","debt_ratio","credit_score","loan_amount","employment_years"],
+  "metrics": {"roc_auc": 0.6611, "accuracy": 0.615},
+  "deps": {"sklearn":"1.8.0","numpy":"2.4.2","pandas":"3.0.1"}
+}
+Predict
 
-creation timestamp
-
-training sample size
-
-evaluation metrics
-
-dependency versions
-
-Prediction Endpoint
+Request
 
 POST /predict
+Content-Type: application/json
 
-Example request:
+Body
 
 {
   "income": 45000,
@@ -104,120 +127,172 @@ Example request:
   "employment_years": 3
 }
 
-Example response:
+Response (example)
 
 {
-  "probability": 0.51,
+  "probability": 0.5147535266593802,
   "label": 1,
-  "model_version": "2026-03-01T16:39:42Z",
+  "model_version": "2026-03-01T16:39:42.590227+00:00",
   "threshold": 0.5
 }
-Local Development
-
-Activate environment:
-
+Local development
+1) Activate environment
 conda activate inference_platform
+2) Run the API locally
 
-Run API locally:
+From the repo root:
 
 python -m app.main
 
-Service available at:
+Test:
 
-http://localhost:8000
+curl -s http://127.0.0.1:8000/health
+curl -s http://127.0.0.1:8000/model-info
 Docker
-
-Build container image:
-
+Build locally
 docker build -t ml-inference-api .
-
-Run container:
-
+Run locally
 docker run -p 8000:8000 ml-inference-api
-AWS Deployment
 
-Navigate to Terraform directory:
+Test:
 
+curl -s http://127.0.0.1:8000/health
+AWS deployment (ECS Fargate + ALB) using Terraform
+
+Note: AWS resources can incur cost. Use terraform destroy when finished.
+
+Prerequisites
+
+AWS CLI installed and configured (aws configure)
+
+Docker installed
+
+Terraform installed
+
+ECR repository created (or created manually via AWS CLI)
+
+1) Build and push image to ECR
+
+Authenticate Docker to ECR (region example: eu-west-2):
+
+aws ecr get-login-password --region eu-west-2 \
+  | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com
+
+Build and push (Linux amd64 for ECS):
+
+docker buildx create --use --name multiarchbuilder 2>/dev/null || true
+
+docker buildx build \
+  --platform linux/amd64 \
+  -t <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com/ml-inference-api:latest \
+  --push .
+2) Deploy infrastructure
 cd infra/terraform
 terraform init
 
-Deploy infrastructure:
+Apply (image passed as a variable):
 
-terraform apply -var="ecr_image=<ACCOUNT>.dkr.ecr.<REGION>.amazonaws.com/ml-inference-api:<TAG>"
+terraform apply \
+  -var="ecr_image=<ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com/ml-inference-api:latest"
 
-Retrieve load balancer URL:
+Retrieve ALB URL:
 
 terraform output -raw alb_url
+3) Test the deployed service
+ALB="$(terraform output -raw alb_url)"
 
-Destroy infrastructure (recommended after testing to avoid charges):
+curl -s "$ALB/health"
+curl -s "$ALB/model-info"
 
+curl -s -X POST "$ALB/predict" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "income": 45000,
+    "age": 29,
+    "debt_ratio": 0.32,
+    "credit_score": 690,
+    "loan_amount": 12000,
+    "employment_years": 3
+  }'
+4) View logs (CloudWatch)
+
+List log streams:
+
+aws logs describe-log-streams \
+  --log-group-name /ecs/ml-inference \
+  --region eu-west-2 \
+  --order-by LastEventTime \
+  --descending \
+  --max-items 10
+
+Tail logs for a specific stream:
+
+aws logs get-log-events \
+  --log-group-name /ecs/ml-inference \
+  --log-stream-name "<STREAM_NAME>" \
+  --region eu-west-2 \
+  --limit 50
+5) Destroy infrastructure (stop charges)
 terraform destroy
-Infrastructure Design Decisions
 
-ECS Fargate (serverless containers, no EC2 management)
+This removes the VPC, ALB, ECS service/task definition, IAM role, and log group created by Terraform.
 
-awsvpc network mode for task isolation
+Infrastructure design notes
 
-Application Load Balancer for external routing
+ALB exposes HTTP :80 publicly and forwards to target group on :8000
 
-Security groups restricting ALB-to-task communication
+Target group health check hits /health
 
-CloudWatch log streaming for container output
+Task security group only allows inbound :8000 from the ALB security group
 
-No hardcoded credentials
+awsvpc mode gives each task its own ENI (isolation and clear security boundaries)
 
-Terraform state excluded from version control
+CloudWatch logs provide runtime inspection without shell access into containers
 
-Fully reproducible infrastructure lifecycle
+No secrets committed (Terraform state excluded; credentials are via AWS CLI profile)
 
-Observability
+Common issues and fixes
+“Manifest does not contain descriptor matching platform 'linux/amd64'”
 
-Container logs streamed to CloudWatch
+You built/pushed an image for the wrong architecture (often arm64 on Apple Silicon).
 
-ALB health checks targeting /health
+Fix: rebuild and push using:
 
-Runtime model metadata endpoint
+docker buildx build --platform linux/amd64 -t <ECR_URI>:latest --push .
 
-Deterministic model versioning via timestamp
+Then force a new deployment:
 
-Engineering Concepts Demonstrated
+aws ecs update-service \
+  --cluster ml-inference-cluster \
+  --service ml-inference-svc \
+  --force-new-deployment \
+  --region eu-west-2
+ALB returns 503 Service Temporarily Unavailable
 
-Infrastructure as Code (Terraform)
+Usually means targets are not healthy yet (task still starting or failing).
 
-Containerisation best practices
+Check:
 
-Cloud-native service architecture
+ECS service events
 
-Separation of training and inference
+Task status
 
-API contract definition
+CloudWatch logs
 
-Dependency introspection
+Target group health
 
-Cost-aware infrastructure lifecycle management
+Next steps (extensions)
 
-Production-style ML system operationalisation
+These are the most natural production upgrades:
 
-Potential Extensions
+CI/CD pipeline (GitHub Actions) to build/push image + terraform apply
 
-CI/CD via GitHub Actions
+HTTPS termination with ACM + redirect HTTP -> HTTPS
 
-Blue/Green or Canary deployment strategy
+Auto-scaling based on CPU / request count
 
-Auto-scaling policies
+Blue/green or canary deployments
 
-HTTPS with ACM certificate
+Add request tracing + structured logs
 
-Model registry integration
-
-Multi-model routing
-
-LLM-based decision explanation layer
-
-Metrics collection via Prometheus / CloudWatch metrics
-
-Purpose
-
-This project demonstrates not only ML modelling capability, but the ability to operationalise ML systems in a cloud-native environment using industry-standard tooling and infrastructure practices.
-
-It represents a production-oriented ML engineering workflow rather than a notebook-only implementation.
+Add an LLM “explanation layer” for model decisions (optional, gated by API key)
