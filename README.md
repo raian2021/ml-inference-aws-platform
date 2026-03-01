@@ -1,81 +1,79 @@
-# Scalable ML Inference Platform on AWS (ECS Fargate + Terraform)
+Scalable ML Inference Platform on AWS
 
-A cloud-native machine learning inference platform demonstrating production-grade engineering patterns:
+ECS Fargate • Application Load Balancer • Terraform • Docker • FastAPI
 
-- Model training pipeline (scikit-learn)
-- FastAPI inference service
-- Docker containerisation
-- AWS ECS Fargate deployment
-- Application Load Balancer (ALB)
-- Infrastructure as Code (Terraform)
-- CloudWatch logging
-- Reproducible deploy → destroy lifecycle
+Overview
 
----
+This project implements an end-to-end, production-style machine learning inference platform deployed to AWS using Infrastructure as Code.
 
-## 🚀 Overview
+The system demonstrates the complete operationalisation lifecycle of an ML model:
 
-This project implements an end-to-end ML inference system:
+Model training (scikit-learn)
 
-1. Train a binary classification model on synthetic financial data
-2. Package the model as a containerised FastAPI service
-3. Deploy to AWS ECS Fargate
-4. Expose via an Application Load Balancer
-5. Provision all infrastructure using Terraform
-6. Tear down safely to avoid unnecessary cloud costs
+Containerised inference service (FastAPI + Docker)
 
-The platform simulates a **credit risk / debt approval model**, returning probability scores and classification decisions.
+Cloud deployment (AWS ECS Fargate)
 
----
+Traffic routing (Application Load Balancer)
 
-## 🏗 Architecture
+Infrastructure provisioning (Terraform)
 
-Client  
-↓  
-Application Load Balancer (HTTP)  
-↓  
-ECS Fargate Service (1 task)  
-↓  
-FastAPI Application  
-↓  
-Loaded scikit-learn Pipeline  
-↓  
-JSON Prediction Response  
+Observability (CloudWatch logs)
 
-Infrastructure is provisioned using Terraform.
+Cost-aware deploy and destroy lifecycle
 
----
+The platform simulates a credit risk / debt approval classifier and exposes prediction endpoints over HTTP.
 
-## 🧠 Model Details
+Architecture
 
-Model type: StandardScaler + LogisticRegression (scikit-learn pipeline)
+Client
+→ Application Load Balancer (HTTP)
+→ ECS Fargate Service (1 task)
+→ FastAPI Inference Application
+→ scikit-learn Pipeline
+→ JSON Response
 
+All infrastructure is provisioned and destroyed using Terraform.
+
+Model Design
+
+Model type:
+
+StandardScaler + LogisticRegression (scikit-learn pipeline)
 
 Features:
-- income
-- age
-- debt_ratio
-- credit_score
-- loan_amount
-- employment_years
+
+income
+
+age
+
+debt_ratio
+
+credit_score
+
+loan_amount
+
+employment_years
 
 Outputs:
-- probability
-- binary label (threshold-based)
 
-Metadata exposed via `/model-info`.
+probability (float)
 
----
+binary classification label (threshold-based decision)
 
-## 🧪 API Endpoints
+Model metadata (including dependency versions and evaluation metrics) is exposed via the /model-info endpoint.
 
-### Health Check
+API Specification
+Health Check
+
 GET /health
 
-
 Response:
-```json
-{"status":"ok"}
+
+{
+  "status": "ok"
+}
+Model Metadata
 
 GET /model-info
 
@@ -91,9 +89,11 @@ evaluation metrics
 
 dependency versions
 
+Prediction Endpoint
+
 POST /predict
 
-Example:
+Example request:
 
 {
   "income": 45000,
@@ -104,82 +104,105 @@ Example:
   "employment_years": 3
 }
 
-Response:
+Example response:
 
 {
   "probability": 0.51,
   "label": 1,
-  "model_version": "...",
+  "model_version": "2026-03-01T16:39:42Z",
   "threshold": 0.5
 }
+Local Development
 
-🐳 Docker
+Activate environment:
 
-Build locally:
+conda activate inference_platform
+
+Run API locally:
+
+python -m app.main
+
+Service available at:
+
+http://localhost:8000
+Docker
+
+Build container image:
 
 docker build -t ml-inference-api .
 
-Run locally:
+Run container:
 
 docker run -p 8000:8000 ml-inference-api
-☁ AWS Deployment (Terraform)
+AWS Deployment
 
 Navigate to Terraform directory:
 
 cd infra/terraform
 terraform init
+
+Deploy infrastructure:
+
 terraform apply -var="ecr_image=<ACCOUNT>.dkr.ecr.<REGION>.amazonaws.com/ml-inference-api:<TAG>"
 
-Retrieve ALB URL:
+Retrieve load balancer URL:
 
 terraform output -raw alb_url
 
-Destroy infrastructure:
+Destroy infrastructure (recommended after testing to avoid charges):
 
 terraform destroy
-🔐 Security & Cloud Design Decisions
+Infrastructure Design Decisions
 
-Fargate (serverless containers — no EC2 management)
+ECS Fargate (serverless containers, no EC2 management)
 
 awsvpc network mode for task isolation
 
-Security groups restrict ALB → task traffic
+Application Load Balancer for external routing
+
+Security groups restricting ALB-to-task communication
+
+CloudWatch log streaming for container output
 
 No hardcoded credentials
 
-Terraform state excluded from Git
+Terraform state excluded from version control
 
-Infrastructure fully reproducible
+Fully reproducible infrastructure lifecycle
 
-📊 Observability
+Observability
 
 Container logs streamed to CloudWatch
 
-Health checks via ALB target group
+ALB health checks targeting /health
 
-Model metadata endpoint for runtime introspection
+Runtime model metadata endpoint
 
-💡 Engineering Concepts Demonstrated
+Deterministic model versioning via timestamp
+
+Engineering Concepts Demonstrated
 
 Infrastructure as Code (Terraform)
 
 Containerisation best practices
 
-Multi-stage cloud architecture
+Cloud-native service architecture
 
-Dependency version introspection
+Separation of training and inference
 
-Model metadata surfacing
+API contract definition
 
-Cost-aware deploy/destroy lifecycle
+Dependency introspection
 
-Clean separation of training and inference
+Cost-aware infrastructure lifecycle management
 
-🔮 Potential Extensions
+Production-style ML system operationalisation
+
+Potential Extensions
 
 CI/CD via GitHub Actions
 
-Blue/Green deployment strategy
+Blue/Green or Canary deployment strategy
 
 Auto-scaling policies
 
@@ -191,16 +214,10 @@ Multi-model routing
 
 LLM-based decision explanation layer
 
-📌 Why This Project Matters
+Metrics collection via Prometheus / CloudWatch metrics
 
-This project demonstrates not only ML modelling, but the operationalisation of ML systems:
+Purpose
 
-Moving from notebook → container
+This project demonstrates not only ML modelling capability, but the ability to operationalise ML systems in a cloud-native environment using industry-standard tooling and infrastructure practices.
 
-Moving from local → cloud
-
-Deploying using reproducible infrastructure
-
-Managing cost and lifecycle responsibly
-
-It represents a production-style ML engineering workflow.
+It represents a production-oriented ML engineering workflow rather than a notebook-only implementation.
