@@ -135,6 +135,14 @@ Response (example)
   "model_version": "2026-03-01T16:39:42.590227+00:00",
   "threshold": 0.5
 }
+
+
+
+
+
+
+
+
 Local development
 1) Activate environment
 conda activate inference_platform
