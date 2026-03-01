@@ -1,0 +1,3 @@
+[
+  "tests/test_inference.py::test_prediction_returns_valid_structure"
+]

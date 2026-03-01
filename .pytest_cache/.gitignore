@@ -1,0 +1,37 @@
+cat > .gitignore <<'EOF'
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+.conda/
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Env files / secrets
+.env
+.env.*
+*.key
+*.pem
+
+# Model artifacts (optional: keep if you want reproducible demo)
+# If you want to commit model.joblib + metadata.json, comment these lines out.
+model/artifacts/
+
+# Terraform (NEVER commit state)
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/.terraform.lock.hcl
+
+# Logs
+*.log
+EOF
